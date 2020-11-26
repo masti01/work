@@ -214,23 +214,20 @@ Room2CAS = {
 
 # regexes to extract info from DC-PAMT specific HTML export files
 #TODO: prepare for other tools
-pamtR = re.compile(r"<table.*?<table.*?</table>.*?</table>")
-roomsR = re.compile(r"Rooms:</small></td><td style='width: 585px;'>(?P<rooms>.*?)</td></tr>")
+pamtR = re.compile(r"(?s)<table.*?<table.*?</table>.*?</table>")
+roomsR = re.compile(r"(?s)Rooms:</small></td><td style='width: 585px;'>(?P<rooms>.*?)</td></tr>")
 roomR = re.compile(r"(?P<room>.*?)<br>")
 dateR = re.compile(
-    r"Date:</small></td><td style='width: 585px;'>(?P<start>[\d\.]*)&nbsp;-&nbsp;(?P<end>[\d\.]*)</td></tr><tr>")
+    r"(?s)Date:</small></td><td style='width: 585px;'>(?P<start>[\d\.]*)&nbsp;-&nbsp;(?P<end>[\d\.]*)</td></tr><tr>")
 visitorR = re.compile(
-    r"Visitor:</small></td><td style='width: 585px;'>(?P<visitor>.*?)&nbsp;<small>(?P<comment>.*?)</small><br></td></tr>")
-guestsR = re.compile(r"Guests:</small></td><td style='width: 585px;'>(?P<guests>.*?)</td></tr>")
+    r"(?s)Visitor:</small></td><td style='width: 585px;'>(?P<visitor>.*?)&nbsp;<small>(?P<comment>.*?)</small><br></td></tr>")
+guestsR = re.compile(r"(?s)Guests:</small></td><td style='width: 585px;'>(?P<guests>.*?)</td></tr>")
 guestR = re.compile(r"(?P<name>.*?)&nbsp;.*?</small><br>")
 
 roomAccessCAS = {}
 personsAccess = {}
 roomAccessPAMT = {}
-resultAccess = {
-    'add': {},
-    'remove': {}
-}
+resultAccess = dict(add={}, remove={})
 cardList = {}
 
 
@@ -428,6 +425,30 @@ def PAMT2CAScheck():
                 resultAccess['add'][r][n] = roomAccessPAMT[r][n]['to']
 
 
+def PAMTCASbyPerson():
+    """
+
+    :rtype: object
+    """
+    # use resultAccess['add'] and resultAccess['remove'] to create by person view
+    print("PAMTCASbyPerson ADD")
+    print(resultAccess['add'])
+    for r in resultAccess['add'].keys(): # iterate by room
+        for n in resultAccess['add'][r].keys(): #iterate by person
+            if n not in personsAccess.keys():
+                personsAccess[n] = {'add':[], 'remove':[]}
+            personsAccess[n]['add'].append({'room':r, 'to':resultAccess['add'][r][n]})
+    print("PAMTCASbyPerson REMOVE")
+    print(resultAccess['remove'])
+    for r in resultAccess['remove'].keys(): # iterate by room
+        for n in resultAccess['remove'][r].keys(): #iterate by person
+            if n not in personsAccess.keys():
+                personsAccess[n] = {'add':[], 'remove':[]}
+            personsAccess[n]['remove'].append({'room':r, 'card':resultAccess['remove'][r][n]})
+    print("PAMTCASbyPerson RESULT")
+    print(personsAccess)
+    return(personsAccess)
+
 def CAS2PAMTcheck():
     # compare CAS 2 PAMT entries
     for r in roomAccessCAS.keys():
@@ -440,11 +461,12 @@ def CAS2PAMTcheck():
                 resultAccess['remove'][r][n] = roomAccessCAS[r][n]['card']
 
 
+
 def generateResultsFiles(reslist, fname):
     # list to add entries
     print("GENERATE RESULTS ADD")
 
-    res = '*****************************************************\n'
+    res =  '*****************************************************\n'
     res += '*****************  Entries to ADD   *****************\n'
     res += '*****************************************************\n'
     res += 'Generated on: {0}\n\n'.format(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
@@ -476,6 +498,34 @@ def generateResultsFiles(reslist, fname):
         res += 'NAME\tCARD NUMBER\n'
         for name in reslist['remove'][r].keys():
             res += "REMOVE:\t{0}\t{1}\n".format(name, reslist['remove'][r][name])
+        res += '*****************************************************\n'
+
+    with open(fname, 'w') as f:
+        f.write(res)
+
+def generateResultsFilesbyPerson(reslist, fname):
+    # list to add entries
+    print("GENERATE RESULTS BY PERSON")
+    res =  '*****************************************************\n'
+    res += '****************  Entries to change   ***************\n'
+    res += '*****************************************************\n'
+    res += 'Generated on: {0}\n\n'.format(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+    for n in reslist.keys():
+        res += '\n{0}\t'.format(n)
+        if n not in cardList.keys():
+            res += '*** MISSING CARD NUMBER ***\n'
+        else:
+            res += 'CARD:{0}\n'.format(cardList[n])
+        #print('{0}'.format(reslist[n]))
+        for a in reslist[n].keys():
+            if a == 'add':
+                for r in reslist[n][a]:
+                    #print('{0}:{1}:{2}:{3}'.format(n, a, r['room'], r['to'].strftime("%Y-%m-%d")))
+                    res += 'ADD:\tROOM:[{0}] ({1})\t{2}\n'.format(r['room'], Room2CAS[r['room']], r['to'].strftime("%Y-%m-%d"))
+            else:
+                for r in reslist[n][a]:
+                    #print('{0}:{1}:{2}:{3}'.format(n, a, r['room'], r['card']))
+                    res += 'REMOVE:\tROOM:[{0}] ({1})\n'.format(r['room'], Room2CAS[r['room']])
         res += '*****************************************************\n'
 
     with open(fname, 'w') as f:
@@ -565,10 +615,12 @@ def run():
 
     PAMT2CAScheck()
     CAS2PAMTcheck()
+    PAMTCASbyPerson()
 
     generateCardNumberFiles(roomAccessCAS, 'AMAG card list.log')
     generateResultsFiles(resultAccess, 'comparison results by room.log')
     generateFullAccessFiles(roomAccessPAMT, 'all rooms access.log')
+    generateResultsFilesbyPerson(personsAccess, 'comparison results by person.log')
     generateMissingCardList('missing cards.log')
 
 
