@@ -565,10 +565,10 @@ def run():
     PAMT2CAScheck()
     CAS2PAMTcheck()
 
-    generateCardNumberFiles(roomAccessCAS, 'cards.log')
-    generateResultsFiles(resultAccess, 'results.log')
-    generateFullAccessFiles(roomAccessPAMT, 'access.log')
-    generateMissingCardList('missing.log')
+    generateCardNumberFiles(roomAccessCAS, 'AMAG card list.log')
+    generateResultsFiles(resultAccess, 'comparison results by room.log')
+    generateFullAccessFiles(roomAccessPAMT, 'all rooms access.log')
+    generateMissingCardList('missing cards.log')
 
 
 # Press the green button in the gutter to run the script.
