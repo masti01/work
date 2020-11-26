@@ -292,13 +292,13 @@ def processCAS(fname, rooms):
 
 def prepareCASRooms(room):
     for r in CAS2Room[room]:
-        if not r in roomAccessCAS.keys():
+        if r not in roomAccessCAS.keys():
             roomAccessCAS[r] = {}
 
 
 def preparePAMTRooms():
     for r in PAMT2Room:
-        if not r in roomAccessPAMT.keys():
+        if r not in roomAccessPAMT.keys():
             roomAccessPAMT[r] = {}
 
 
@@ -365,9 +365,9 @@ def getGuests(line):
 
 def addRoomAccessPAMT(name, to, room):
     # add access by room from PAMT
-    if not room in roomAccessPAMT.keys():
+    if room not in roomAccessPAMT.keys():
         roomAccessPAMT[room] = {}
-    if not name in roomAccessPAMT[room].keys():
+    if name not in roomAccessPAMT[room].keys():
         l, f = names(name)
         roomAccessPAMT[room][name] = {
             'to': to,
@@ -415,10 +415,9 @@ def PAMT2CAScheck():
             try:
                 casAccess = roomAccessCAS[r][n]
             except KeyError:
-                if not r in resultAccess['add'].keys():
+                if r not in resultAccess['add'].keys():
                     resultAccess['add'][r] = {}
                 resultAccess['add'][r][n] = roomAccessPAMT[r][n]['to']
-
 
 
 def CAS2PAMTcheck():
@@ -428,7 +427,7 @@ def CAS2PAMTcheck():
             try:
                 pamtAccess = roomAccessPAMT[r][n]
             except KeyError:
-                if not r in resultAccess['remove'].keys():
+                if r not in resultAccess['remove'].keys():
                     resultAccess['remove'][r] = {}
                 resultAccess['remove'][r][n] = roomAccessCAS[r][n]['card']
 
@@ -452,7 +451,7 @@ def generateResultsFiles(reslist, fname):
         res += 'ACTION\tROOM\tNAME\tEND DATE\tCARD NUMBER\n'
         res += '*****************************************************\n'
         for name in reslist['add'][r].keys():
-            if not name in cardList.keys():
+            if name not in cardList.keys():
                 res += "ADD:\t{0}\t{1}\t{2}\t*** MISSING CARD NUMBER ***\n".format(r, name,
                                                                                    reslist['add'][r][name].strftime(
                                                                                        "%Y-%m-%d"))
@@ -493,7 +492,7 @@ def generateFullAccessFiles(reslist, fname):
         res += "\n\nROOM:{0} (CAS:{1})\n".format(r, Room2CAS[r])
         res += 'ACTION\tNAME\tEND DATE\tCARD NUMBER\n'
         for name in reslist[r].keys():
-            if not name in cardList.keys():
+            if name not in cardList.keys():
                 res += "SET:\t{0}\t{1}\t*** MISSING CARD NUMBER ***\n".format(name, reslist[r][name]['to'].strftime(
                     "%Y-%m-%d"))
             else:
@@ -534,7 +533,7 @@ def generateMissingCardList(fname):
     res += 'Generated on: {0}\n\n'.format(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
     for r in roomAccessPAMT.keys():
         for n in roomAccessPAMT[r].keys():
-            if not n in cardList.keys() and n not in missing:
+            if n not in cardList.keys() and n not in missing:
                 missing.append(n)
 
     for n in sorted(missing):
@@ -560,7 +559,6 @@ def run():
                 processCAS('CAS-PAMT/' + entry.name, CAS2Room[room])
             elif entry.name.endswith('.html'):
                 processPAMT('CAS-PAMT/' + entry.name)
-
 
     PAMT2CAScheck()
     CAS2PAMTcheck()
