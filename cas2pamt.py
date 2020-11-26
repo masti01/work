@@ -10,6 +10,7 @@ from datetime import datetime
 # global translations
 from typing import Dict, Any, Union
 
+#TODO: make translation tables dynamic from a file
 PAMT2CAS: Dict[Union[str, Any], Union[str, Any]] = {
     'C01 Main Entrance': 'C01+C02 Main Entrance',
     'C02 Lobby': 'C01+C02 Main Entrance',
@@ -53,6 +54,7 @@ PAMT2CAS: Dict[Union[str, Any], Union[str, Any]] = {
     'S01 Security': 'S01 IBM SECURITY',
 }
 
+#TODO: make translation tables dynamic from a file
 CAS2PAMT = {
     'C01+C02 Main Entrance': 'C02 Main entry + lobby',
     'C03 CONFERENCE ROOM': 'C03 Conference room',
@@ -86,6 +88,7 @@ CAS2PAMT = {
     'S01 IBM SECURITY': 'S01 Security',
 }
 
+#TODO: make translation tables dynamic from a file
 PAMT2Room = {
     'C01 Main Entrance': ['C01'],
     'C02 Lobby': ['C02'],
@@ -129,6 +132,7 @@ PAMT2Room = {
     'S01 Security': ['S01'],
 }
 
+#TODO: make translation tables dynamic from a file
 CAS2Room = {
     'C01+C02 Main Entrance': ['C01', 'C02'],
     'C03 CONFERENCE ROOM': ['C03'],
@@ -165,6 +169,7 @@ CAS2Room = {
     'S01 IBM SECURITY': ['S01'],
 }
 
+#TODO: make translation tables dynamic from a file
 Room2CAS = {
     'C01': 'C01+C02 Main Entrance',
     'C02': 'C01+C02 Main Entrance',
@@ -207,7 +212,8 @@ Room2CAS = {
     'S01': 'S01 IBM SECURITY',
 }
 
-# regexes
+# regexes to extract info from DC-PAMT specific HTML export files
+#TODO: prepare for other tools
 pamtR = re.compile(r"<table.*?<table.*?</table>.*?</table>")
 roomsR = re.compile(r"Rooms:</small></td><td style='width: 585px;'>(?P<rooms>.*?)</td></tr>")
 roomR = re.compile(r"(?P<room>.*?)<br>")
@@ -238,6 +244,8 @@ def names(name):
 def cleanupCasLine(last, first):
     # remove Contractor, keycard
     # reverse firstname & name
+    #return normalized name LastName, FirstName
+
     if 'contractor' in last:
         last = last.replace('contractor ', '')
         f, l = tuple(last.split())
@@ -430,11 +438,6 @@ def CAS2PAMTcheck():
                 if r not in resultAccess['remove'].keys():
                     resultAccess['remove'][r] = {}
                 resultAccess['remove'][r][n] = roomAccessCAS[r][n]['card']
-
-
-def writeResults(text, fname):
-    with open(fname, 'w') as f:
-        f.write(text)
 
 
 def generateResultsFiles(reslist, fname):
