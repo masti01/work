@@ -231,234 +231,237 @@ resultAccess = dict(add={}, remove={})
 cardList = {}
 
 
-def names(name):
-    # extract last name form name
-    l = name.split(', ')[0]
-    f = name.split(', ')[1]
-    return (l, f)
+class dataInput():
 
 
-def cleanupCasLine(last, first):
-    # remove Contractor, keycard
-    # reverse firstname & name
-    #return normalized name LastName, FirstName
-
-    if 'contractor' in last:
-        last = last.replace('contractor ', '')
-        f, l = tuple(last.split())
-    else:
-        f = first.split()[0]
-        l = last.split()[0]
-    # print(f'Last:{l} First:{f}')
-    return ("{0}, {1}".format(l.capitalize(), f.capitalize()))
+    def names(self, name):
+        # extract last name form name
+        l = name.split(', ')[0]
+        f = name.split(', ')[1]
+        return (l, f)
 
 
-def addRoomAccessCAS(name, card, to, room):
-    # add access by room
-    l, f = names(name)
-    if not name in roomAccessCAS[room].keys():
-        roomAccessCAS[room][name] = {
-            'card': card,
-            'to': to,
-            'Last': l,
-            'First': f,
-        }
-    elif roomAccessCAS[room][name]['to'] < to:
-        roomAccessCAS[room][name]['to'] = to
-    return
+    def cleanupCasLine(self, last, first):
+        # remove Contractor, keycard
+        # reverse firstname & name
+        #return normalized name LastName, FirstName
+
+        if 'contractor' in last:
+            last = last.replace('contractor ', '')
+            f, l = tuple(last.split())
+        else:
+            f = first.split()[0]
+            l = last.split()[0]
+        # print(f'Last:{l} First:{f}')
+        return ("{0}, {1}".format(l.capitalize(), f.capitalize()))
 
 
-def treatCasLine(line, rooms):
-    # process one line from CAS file
-    # return dict
-
-    l, f, c, i, a, to = tuple(line.split('\t'))
-    n = cleanupCasLine(l, f)
-    try:
-        to = datetime.strptime(to, "%d/%m/%Y")
-    except ValueError:
-        print('^^^ VALUE ERROR in room:{0} ^^^'.format(rooms))
+    def addRoomAccessCAS(self, name, card, to, room):
+        # add access by room
+        l, f = self.names(name)
+        if not name in roomAccessCAS[room].keys():
+            roomAccessCAS[room][name] = {
+                'card': card,
+                'to': to,
+                'Last': l,
+                'First': f,
+            }
+        elif roomAccessCAS[room][name]['to'] < to:
+            roomAccessCAS[room][name]['to'] = to
         return
-    for r in rooms:
-        addRoomAccessCAS(n, c, to, r)
 
 
-def processCAS(fname, rooms):
-    # process CAS file fname
-    print('Processing CAS file:{0}'.format(fname))
-    lcount = 0
-    with open(fname, 'r') as f:
-        for l in f.readlines()[6:-5]:
-            treatCasLine(l.strip('\n').lower(), rooms)
+    def treatCasLine(self, line, rooms):
+        # process one line from CAS file
+        # return dict
+
+        l, f, c, i, a, to = tuple(line.split('\t'))
+        n = self.cleanupCasLine(l, f)
+        try:
+            to = datetime.strptime(to, "%d/%m/%Y")
+        except ValueError:
+            print('^^^ VALUE ERROR in room:{0} ^^^'.format(rooms))
+            return
+        for r in rooms:
+            self.addRoomAccessCAS(n, c, to, r)
+
+
+    def processCAS(self, fname, rooms):
+        # process CAS file fname
+        print('Processing CAS file:{0}'.format(fname))
+        lcount = 0
+        with open(fname, 'r') as f:
+            for l in f.readlines()[6:-5]:
+                self.treatCasLine(l.strip('\n').lower(), rooms)
+                lcount += 1
+            print('Processed {0} lines'.format(lcount))
+        return
+
+
+    def prepareCASRooms(self, room):
+        for r in CAS2Room[room]:
+            if r not in roomAccessCAS.keys():
+                roomAccessCAS[r] = {}
+
+
+    def preparePAMTRooms(self, ):
+        for r in PAMT2Room:
+            if r not in roomAccessPAMT.keys():
+                roomAccessPAMT[r] = {}
+
+
+    def getRoomsList(self, line):
+        # return list of rooms
+        roomList = []
+        rooms = roomsR.search(line)
+        if rooms:
+            rcount = 1
+            for r in roomR.finditer(rooms.group('rooms')):
+                rcount += 1
+                if r.group('room') in PAMT2Room:
+                    roomList.extend(PAMT2Room[r.group('room')])
+        return (roomList)
+
+
+    def getRequestDates(self, line):
+        # return start & end date of request as tuple
+        start = None
+        end = None
+        date = dateR.search(line)
+        if date:
+            try:
+                start = datetime.strptime(date.group('start'), "%d.%m.%Y")
+                end = datetime.strptime(date.group('end'), "%d.%m.%Y")
+            except ValueError:
+                print('^^^ VALUE ERROR in dates:{0} ^^^'.format(date))
+                return (None, None)
+        return (start, end)
+
+
+    def cleanGuestName(self, name):
+        # return guest name in a form Surname, Name
+        l = re.split(", | ", name)
+        return ("{0}, {1}".format(l[0].lower().capitalize(), l[1].lower().capitalize()))
+
+
+    def getVisitor(self, line):
+        # return visitor name for the request
+        # None if does not need access
+        v = visitorR.search(line)
+        if v:
+            visitor = v.group('visitor')
+            comment = v.group('comment')
+            if 'no action' in comment.lower():
+                return (None)
+            else:
+                return (self.cleanGuestName(visitor))
+        return (None)
+
+
+    def getGuests(self, line):
+        # return list of guest names for the request
+        # None if does not need access
+        guests = guestsR.search(line)
+        guestsList = []
+        if guests:
+            gcount = 1
+            for g in guestR.finditer(guests.group('guests')):
+                gcount += 1
+                guestsList.append(self.cleanGuestName(g.group('name')))
+        return (guestsList)
+
+
+    def addRoomAccessPAMT(self, name, to, room):
+        # add access by room from PAMT
+        if room not in roomAccessPAMT.keys():
+            roomAccessPAMT[room] = {}
+        if name not in roomAccessPAMT[room].keys():
+            l, f = self.names(name)
+            roomAccessPAMT[room][name] = {
+                'to': to,
+                'Last': l,
+                'First': f
+            }
+        elif roomAccessPAMT[room][name]['to'] < to:
+            # change access end date to later
+            roomAccessPAMT[room][name]['to'] = to
+        return
+
+
+    def treatPAMTLine(self, line):
+        # process one line from PAMT report = 1 record
+        rooms = self.getRoomsList(line)
+        startDate, endDate = self.getRequestDates(line)
+        visitor = self.getVisitor(line)
+        if visitor:
+            visitorList = [visitor, ]
+        else:
+            visitorList = []
+        visitorList.extend(self.getGuests(line))
+        for r in rooms:
+            for v in visitorList:
+                self.addRoomAccessPAMT(v, endDate, r)
+
+
+    def processPAMT(self, fname):
+        # process PAMT file fname
+        print('Processing PAMT file:{0}'.format(fname))
+        lcount = 0
+        with open(fname, 'r') as f:
+            file = f.read()
+
+        for l in pamtR.findall(file):
+            self.treatPAMTLine(l)
             lcount += 1
         print('Processed {0} lines'.format(lcount))
-    return
 
 
-def prepareCASRooms(room):
-    for r in CAS2Room[room]:
-        if r not in roomAccessCAS.keys():
-            roomAccessCAS[r] = {}
+    def PAMT2CAScheck(self):
+        # compare PAMT 2 CAS entries
+        for r in roomAccessPAMT.keys():
+            for n in roomAccessPAMT[r].keys():
+                try:
+                    casAccess = roomAccessCAS[r][n]
+                except KeyError:
+                    if r not in resultAccess['add'].keys():
+                        resultAccess['add'][r] = {}
+                    resultAccess['add'][r][n] = roomAccessPAMT[r][n]['to']
 
 
-def preparePAMTRooms():
-    for r in PAMT2Room:
-        if r not in roomAccessPAMT.keys():
-            roomAccessPAMT[r] = {}
+    def PAMTCASbyPerson(self):
+        """
 
+        :rtype: object
+        """
+        # use resultAccess['add'] and resultAccess['remove'] to create by person view
+        print("PAMTCASbyPerson ADD")
+        print(resultAccess['add'])
+        for r in resultAccess['add'].keys(): # iterate by room
+            for n in resultAccess['add'][r].keys(): #iterate by person
+                if n not in personsAccess.keys():
+                    personsAccess[n] = {'add':[], 'remove':[]}
+                personsAccess[n]['add'].append({'room':r, 'to':resultAccess['add'][r][n]})
+        print("PAMTCASbyPerson REMOVE")
+        print(resultAccess['remove'])
+        for r in resultAccess['remove'].keys(): # iterate by room
+            for n in resultAccess['remove'][r].keys(): #iterate by person
+                if n not in personsAccess.keys():
+                    personsAccess[n] = {'add':[], 'remove':[]}
+                personsAccess[n]['remove'].append({'room':r, 'card':resultAccess['remove'][r][n]})
+        print("PAMTCASbyPerson RESULT")
+        print(personsAccess)
+        return(personsAccess)
 
-def getRoomsList(line):
-    # return list of rooms
-    roomList = []
-    rooms = roomsR.search(line)
-    if rooms:
-        rcount = 1
-        for r in roomR.finditer(rooms.group('rooms')):
-            rcount += 1
-            if r.group('room') in PAMT2Room:
-                roomList.extend(PAMT2Room[r.group('room')])
-    return (roomList)
-
-
-def getRequestDates(line):
-    # return start & end date of request as tuple
-    start = None
-    end = None
-    date = dateR.search(line)
-    if date:
-        try:
-            start = datetime.strptime(date.group('start'), "%d.%m.%Y")
-            end = datetime.strptime(date.group('end'), "%d.%m.%Y")
-        except ValueError:
-            print('^^^ VALUE ERROR in dates:{0} ^^^'.format(date))
-            return (None, None)
-    return (start, end)
-
-
-def cleanGuestName(name):
-    # return guest name in a form Surname, Name
-    l = re.split(", | ", name)
-    return ("{0}, {1}".format(l[0].lower().capitalize(), l[1].lower().capitalize()))
-
-
-def getVisitor(line):
-    # return visitor name for the request
-    # None if does not need access
-    v = visitorR.search(line)
-    if v:
-        visitor = v.group('visitor')
-        comment = v.group('comment')
-        if 'no action' in comment.lower():
-            return (None)
-        else:
-            return (cleanGuestName(visitor))
-    return (None)
-
-
-def getGuests(line):
-    # return list of guest names for the request
-    # None if does not need access
-    guests = guestsR.search(line)
-    guestsList = []
-    if guests:
-        gcount = 1
-        for g in guestR.finditer(guests.group('guests')):
-            gcount += 1
-            guestsList.append(cleanGuestName(g.group('name')))
-    return (guestsList)
-
-
-def addRoomAccessPAMT(name, to, room):
-    # add access by room from PAMT
-    if room not in roomAccessPAMT.keys():
-        roomAccessPAMT[room] = {}
-    if name not in roomAccessPAMT[room].keys():
-        l, f = names(name)
-        roomAccessPAMT[room][name] = {
-            'to': to,
-            'Last': l,
-            'First': f
-        }
-    elif roomAccessPAMT[room][name]['to'] < to:
-        # change access end date to later
-        roomAccessPAMT[room][name]['to'] = to
-    return
-
-
-def treatPAMTLine(line):
-    # process one line from PAMT report = 1 record
-    rooms = getRoomsList(line)
-    startDate, endDate = getRequestDates(line)
-    visitor = getVisitor(line)
-    if visitor:
-        visitorList = [visitor, ]
-    else:
-        visitorList = []
-    visitorList.extend(getGuests(line))
-    for r in rooms:
-        for v in visitorList:
-            addRoomAccessPAMT(v, endDate, r)
-
-
-def processPAMT(fname):
-    # process PAMT file fname
-    print('Processing PAMT file:{0}'.format(fname))
-    lcount = 0
-    with open(fname, 'r') as f:
-        file = f.read()
-
-    for l in pamtR.findall(file):
-        treatPAMTLine(l)
-        lcount += 1
-    print('Processed {0} lines'.format(lcount))
-
-
-def PAMT2CAScheck():
-    # compare PAMT 2 CAS entries
-    for r in roomAccessPAMT.keys():
-        for n in roomAccessPAMT[r].keys():
-            try:
-                casAccess = roomAccessCAS[r][n]
-            except KeyError:
-                if r not in resultAccess['add'].keys():
-                    resultAccess['add'][r] = {}
-                resultAccess['add'][r][n] = roomAccessPAMT[r][n]['to']
-
-
-def PAMTCASbyPerson():
-    """
-
-    :rtype: object
-    """
-    # use resultAccess['add'] and resultAccess['remove'] to create by person view
-    print("PAMTCASbyPerson ADD")
-    print(resultAccess['add'])
-    for r in resultAccess['add'].keys(): # iterate by room
-        for n in resultAccess['add'][r].keys(): #iterate by person
-            if n not in personsAccess.keys():
-                personsAccess[n] = {'add':[], 'remove':[]}
-            personsAccess[n]['add'].append({'room':r, 'to':resultAccess['add'][r][n]})
-    print("PAMTCASbyPerson REMOVE")
-    print(resultAccess['remove'])
-    for r in resultAccess['remove'].keys(): # iterate by room
-        for n in resultAccess['remove'][r].keys(): #iterate by person
-            if n not in personsAccess.keys():
-                personsAccess[n] = {'add':[], 'remove':[]}
-            personsAccess[n]['remove'].append({'room':r, 'card':resultAccess['remove'][r][n]})
-    print("PAMTCASbyPerson RESULT")
-    print(personsAccess)
-    return(personsAccess)
-
-def CAS2PAMTcheck():
-    # compare CAS 2 PAMT entries
-    for r in roomAccessCAS.keys():
-        for n in roomAccessCAS[r].keys():
-            try:
-                pamtAccess = roomAccessPAMT[r][n]
-            except KeyError:
-                if r not in resultAccess['remove'].keys():
-                    resultAccess['remove'][r] = {}
-                resultAccess['remove'][r][n] = roomAccessCAS[r][n]['card']
+    def CAS2PAMTcheck(self):
+        # compare CAS 2 PAMT entries
+        for r in roomAccessCAS.keys():
+            for n in roomAccessCAS[r].keys():
+                try:
+                    pamtAccess = roomAccessPAMT[r][n]
+                except KeyError:
+                    if r not in resultAccess['remove'].keys():
+                        resultAccess['remove'][r] = {}
+                    resultAccess['remove'][r][n] = roomAccessCAS[r][n]['card']
 
 
 
@@ -598,6 +601,7 @@ def generateMissingCardList(fname):
 
 def run():
     # start execution
+    input = dataInput()
     counter = 0
     with os.scandir('CAS-PAMT') as entries:
         for entry in entries:
@@ -608,14 +612,14 @@ def run():
                 room = re.sub("\.txt", "", entry.name)
                 room = re.sub(r"PL 3216 \(EH7I\) ", "", room)
                 print('#{0}:{1} -> ROOM:{2}'.format(counter, entry.name, room))
-                prepareCASRooms(room)
-                processCAS('CAS-PAMT/' + entry.name, CAS2Room[room])
+                input.prepareCASRooms(room)
+                input.processCAS('CAS-PAMT/' + entry.name, CAS2Room[room])
             elif entry.name.endswith('.html'):
-                processPAMT('CAS-PAMT/' + entry.name)
+                input.processPAMT('CAS-PAMT/' + entry.name)
 
-    PAMT2CAScheck()
-    CAS2PAMTcheck()
-    PAMTCASbyPerson()
+    input.PAMT2CAScheck()
+    input.CAS2PAMTcheck()
+    input.PAMTCASbyPerson()
 
     generateCardNumberFiles(roomAccessCAS, 'AMAG card list.log')
     generateResultsFiles(resultAccess, 'comparison results by room.log')
