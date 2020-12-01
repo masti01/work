@@ -11,7 +11,7 @@ from fpdf import FPDF, HTMLMixin
 # global translations
 from typing import Dict, Any, Union
 
-#TODO: make translation tables dynamic from a file
+# TODO: make translation tables dynamic from a file
 PAMT2CAS: Dict[Union[str, Any], Union[str, Any]] = {
     'C01 Main Entrance': 'C01+C02 Main Entrance',
     'C02 Lobby': 'C01+C02 Main Entrance',
@@ -55,7 +55,7 @@ PAMT2CAS: Dict[Union[str, Any], Union[str, Any]] = {
     'S01 Security': 'S01 IBM SECURITY',
 }
 
-#TODO: make translation tables dynamic from a file
+# TODO: make translation tables dynamic from a file
 CAS2PAMT = {
     'C01+C02 Main Entrance': 'C02 Main entry + lobby',
     'C03 CONFERENCE ROOM': 'C03 Conference room',
@@ -89,7 +89,7 @@ CAS2PAMT = {
     'S01 IBM SECURITY': 'S01 Security',
 }
 
-#TODO: make translation tables dynamic from a file
+# TODO: make translation tables dynamic from a file
 PAMT2Room = {
     'C01 Main Entrance': ['C01'],
     'C02 Lobby': ['C02'],
@@ -133,7 +133,7 @@ PAMT2Room = {
     'S01 Security': ['S01'],
 }
 
-#TODO: make translation tables dynamic from a file
+# TODO: make translation tables dynamic from a file
 CAS2Room = {
     'C01+C02 Main Entrance': ['C01', 'C02'],
     'C03 CONFERENCE ROOM': ['C03'],
@@ -173,7 +173,7 @@ CAS2Room = {
     'S01 IBM SECURITY': ['S01'],
 }
 
-#TODO: make translation tables dynamic from a file
+# TODO: make translation tables dynamic from a file
 Room2CAS = {
     'C01': 'C01+C02 Main Entrance',
     'C02': 'C01+C02 Main Entrance',
@@ -217,7 +217,7 @@ Room2CAS = {
 }
 
 # regexes to extract info from DC-PAMT specific HTML export files
-#TODO: prepare for other tools
+# TODO: prepare for other tools
 pamtR = re.compile(r"(?s)<table.*?<table.*?</table>.*?</table>")
 roomsR = re.compile(r"(?s)Rooms:</small></td><td style='width: 585px;'>(?P<rooms>.*?)</td></tr>")
 roomR = re.compile(r"(?P<room>.*?)<br>")
@@ -235,20 +235,19 @@ resultAccess = dict(add={}, remove={})
 cardList = {}
 
 
-class dataInput():
+def names(name):
+    # extract last name form name
+    l = name.split(', ')[0]
+    f = name.split(', ')[1]
+    return l, f
 
 
-    def names(self, name):
-        # extract last name form name
-        l = name.split(', ')[0]
-        f = name.split(', ')[1]
-        return (l, f)
-
+class DataInput():
 
     def cleanupCasLine(self, last, first):
         # remove Contractor, keycard
         # reverse firstname & name
-        #return normalized name LastName, FirstName
+        # return normalized name LastName, FirstName
 
         print("LAST:{0}".format(last))
         if 'contractor' in last:
@@ -256,18 +255,17 @@ class dataInput():
             try:
                 f, l = tuple(last.split())
             except ValueError:
-                f, l = ('contractor','keycard')
+                f, l = ('contractor', 'keycard')
         else:
             f = first.split()[0]
             l = last.split()[0]
         # print(f'Last:{l} First:{f}')
         return ("{0}, {1}".format(l.capitalize(), f.capitalize()))
 
-
     def addRoomAccessCAS(self, name, card, to, room):
         # add access by room
-        l, f = self.names(name)
-        if not name in roomAccessCAS[room].keys():
+        l, f = names(name)
+        if name not in roomAccessCAS[room].keys():
             roomAccessCAS[room][name] = {
                 'card': card,
                 'to': to,
@@ -277,7 +275,6 @@ class dataInput():
         elif roomAccessCAS[room][name]['to'] < to:
             roomAccessCAS[room][name]['to'] = to
         return
-
 
     def treatCasLine(self, line, rooms):
         # process one line from CAS file
@@ -294,7 +291,6 @@ class dataInput():
         for r in rooms:
             self.addRoomAccessCAS(n, c, to, r)
 
-
     def processCAS(self, fname, rooms):
         # process CAS file fname
         print('Processing CAS file:{0}'.format(fname))
@@ -306,18 +302,15 @@ class dataInput():
             print('Processed {0} lines'.format(lcount))
         return
 
-
     def prepareCASRooms(self, room):
         for r in CAS2Room[room]:
             if r not in roomAccessCAS.keys():
                 roomAccessCAS[r] = {}
 
-
     def preparePAMTRooms(self, ):
         for r in PAMT2Room:
             if r not in roomAccessPAMT.keys():
                 roomAccessPAMT[r] = {}
-
 
     def getRoomsList(self, line):
         # return list of rooms
@@ -330,7 +323,6 @@ class dataInput():
                 if r.group('room') in PAMT2Room:
                     roomList.extend(PAMT2Room[r.group('room')])
         return (roomList)
-
 
     def getRequestDates(self, line):
         # return start & end date of request as tuple
@@ -346,12 +338,10 @@ class dataInput():
                 return (None, None)
         return (start, end)
 
-
     def cleanGuestName(self, name):
         # return guest name in a form Surname, Name
         l = re.split(", | ", name)
         return ("{0}, {1}".format(l[0].lower().capitalize(), l[1].lower().capitalize()))
-
 
     def getVisitor(self, line):
         # return visitor name for the request
@@ -366,7 +356,6 @@ class dataInput():
                 return (self.cleanGuestName(visitor))
         return (None)
 
-
     def getGuests(self, line):
         # return list of guest names for the request
         # None if does not need access
@@ -379,13 +368,12 @@ class dataInput():
                 guestsList.append(self.cleanGuestName(g.group('name')))
         return (guestsList)
 
-
     def addRoomAccessPAMT(self, name, to, room):
         # add access by room from PAMT
         if room not in roomAccessPAMT.keys():
             roomAccessPAMT[room] = {}
         if name not in roomAccessPAMT[room].keys():
-            l, f = self.names(name)
+            l, f = names(name)
             roomAccessPAMT[room][name] = {
                 'to': to,
                 'Last': l,
@@ -395,7 +383,6 @@ class dataInput():
             # change access end date to later
             roomAccessPAMT[room][name]['to'] = to
         return
-
 
     def treatPAMTLine(self, line):
         # process one line from PAMT report = 1 record
@@ -411,7 +398,6 @@ class dataInput():
             for v in visitorList:
                 self.addRoomAccessPAMT(v, endDate, r)
 
-
     def processPAMT(self, fname):
         # process PAMT file fname
         print('Processing PAMT file:{0}'.format(fname))
@@ -424,7 +410,6 @@ class dataInput():
             lcount += 1
         print('Processed {0} lines'.format(lcount))
 
-
     def PAMT2CAScheck(self):
         # compare PAMT 2 CAS entries
         for r in roomAccessPAMT.keys():
@@ -436,7 +421,6 @@ class dataInput():
                         resultAccess['add'][r] = {}
                     resultAccess['add'][r][n] = roomAccessPAMT[r][n]['to']
 
-
     def PAMTCASbyPerson(self):
         """
 
@@ -445,21 +429,21 @@ class dataInput():
         # use resultAccess['add'] and resultAccess['remove'] to create by person view
         print("PAMTCASbyPerson ADD")
         print(resultAccess['add'])
-        for r in resultAccess['add'].keys(): # iterate by room
-            for n in resultAccess['add'][r].keys(): #iterate by person
+        for r in resultAccess['add'].keys():  # iterate by room
+            for n in resultAccess['add'][r].keys():  # iterate by person
                 if n not in personsAccess.keys():
-                    personsAccess[n] = {'add':[], 'remove':[]}
-                personsAccess[n]['add'].append({'room':r, 'to':resultAccess['add'][r][n]})
+                    personsAccess[n] = {'add': [], 'remove': []}
+                personsAccess[n]['add'].append({'room': r, 'to': resultAccess['add'][r][n]})
         print("PAMTCASbyPerson REMOVE")
         print(resultAccess['remove'])
-        for r in resultAccess['remove'].keys(): # iterate by room
-            for n in resultAccess['remove'][r].keys(): #iterate by person
+        for r in resultAccess['remove'].keys():  # iterate by room
+            for n in resultAccess['remove'][r].keys():  # iterate by person
                 if n not in personsAccess.keys():
-                    personsAccess[n] = {'add':[], 'remove':[]}
-                personsAccess[n]['remove'].append({'room':r, 'card':resultAccess['remove'][r][n]})
+                    personsAccess[n] = {'add': [], 'remove': []}
+                personsAccess[n]['remove'].append({'room': r, 'card': resultAccess['remove'][r][n]})
         print("PAMTCASbyPerson RESULT")
         print(personsAccess)
-        return(personsAccess)
+        return (personsAccess)
 
     def CAS2PAMTcheck(self):
         # compare CAS 2 PAMT entries
@@ -496,9 +480,9 @@ class MyFPDF(FPDF, HTMLMixin):
         # Text color in gray
         self.set_text_color(128)
         # Page number
-        self.cell(30, 10, '' , 0, 0, 'C')
-        self.cell(130, 10, 'Generated on: {0}\n\n'.format(datetime.now().strftime("%Y-%m-%d %H:%M:%S")) , 0, 0, 'C')
-        self.cell(30, 10, 'Page ' + str(self.page_no()) + ' of {nb}' , 0, 0, 'R')
+        self.cell(30, 10, '', 0, 0, 'C')
+        self.cell(130, 10, 'Generated on: {0}\n\n'.format(datetime.now().strftime("%Y-%m-%d %H:%M:%S")), 0, 0, 'C')
+        self.cell(30, 10, 'Page ' + str(self.page_no()) + ' of {nb}', 0, 0, 'R')
 
     def chapter_title(self, num, label):
         # Arial 12
@@ -541,7 +525,8 @@ class MyFPDF(FPDF, HTMLMixin):
     def section_subheader(self):
         self.set_font('Arial', 'B', 12)
 
-class dataOutput():
+
+class DataOutput():
 
     def result_files_by_room(self, reslist, fname):
         # list to add entries
@@ -600,7 +585,6 @@ class dataOutput():
         pdf.ln()
 
         print("GENERATE RESULTS REMOVE")
-
 
         for r in reslist['remove'].keys():
             pdf.section_header()
@@ -676,7 +660,6 @@ class dataOutput():
         # pdf.write_html(html)
         pdf.output(fname + '.pdf', 'F')
 
-
     def full_access_setup_file(self, reslist, fname):
         # list all PAMT entries
         print("Generating FULL ACCESS LIST")
@@ -686,7 +669,6 @@ class dataOutput():
         pdf.alias_nb_pages()
         pdf.add_page()
 
-
         pdf.set_creator('Marek Stelmasik (marek.stelmasik@pl.ibm.com)')
         pdf.set_subject('fname')
         pdf.set_title(fname)
@@ -695,7 +677,6 @@ class dataOutput():
         pdf.set_font('Arial', 'B', 24)
         pdf.cell(190, 10, fname, 'B', 1, 'C')
         pdf.ln()
-
 
         for r in reslist.keys():
             pdf.section_header()
@@ -728,7 +709,6 @@ class dataOutput():
         # pdf.write_html(html)
         pdf.output(fname + '.pdf', 'F')
 
-
     def card_numbers_CAS(self, reslist, fname):
         # list all cards per CAS
         print("Generating CARDS LIST")
@@ -736,7 +716,6 @@ class dataOutput():
         pdf = MyFPDF(fname)
         pdf.alias_nb_pages()
         pdf.add_page()
-
 
         pdf.set_creator('Marek Stelmasik (marek.stelmasik@pl.ibm.com)')
         pdf.set_subject(fname)
@@ -746,7 +725,6 @@ class dataOutput():
         pdf.set_font('Arial', 'B', 24)
         pdf.cell(190, 10, 'AMAG cards list', 'B', 1, 'C')
         pdf.ln()
-
 
         for r in reslist.keys():
             for name in reslist[r].keys():
@@ -763,9 +741,7 @@ class dataOutput():
             pdf.ln()
 
         # pdf.write_html(html)
-        pdf.output(fname+'.pdf', 'F')
-
-
+        pdf.output(fname + '.pdf', 'F')
 
     def missing_card_list(self, fname):
         # list persons without card number
@@ -800,8 +776,8 @@ class dataOutput():
 
 def run():
     # start execution
-    input = dataInput()
-    output = dataOutput()
+    data_in = DataInput()
+    data_out = DataOutput()
 
     counter = 0
     with os.scandir('CAS-PAMT') as entries:
@@ -813,20 +789,20 @@ def run():
                 room = re.sub("\.txt", "", entry.name)
                 room = re.sub(r"PL 3216 \(EH7I\) ", "", room)
                 print('#{0}:{1} -> ROOM:{2}'.format(counter, entry.name, room))
-                input.prepareCASRooms(room)
-                input.processCAS('CAS-PAMT/' + entry.name, CAS2Room[room])
+                data_in.prepareCASRooms(room)
+                data_in.processCAS('CAS-PAMT/' + entry.name, CAS2Room[room])
             elif entry.name.endswith('.html'):
-                input.processPAMT('CAS-PAMT/' + entry.name)
+                data_in.processPAMT('CAS-PAMT/' + entry.name)
 
-    input.PAMT2CAScheck()
-    input.CAS2PAMTcheck()
-    input.PAMTCASbyPerson()
+    data_in.PAMT2CAScheck()
+    data_in.CAS2PAMTcheck()
+    data_in.PAMTCASbyPerson()
 
-    output.card_numbers_CAS(roomAccessCAS, 'AMAG card list')
-    output.result_files_by_room(resultAccess, 'comparison results by room')
-    output.full_access_setup_file(roomAccessPAMT, 'all rooms access')
-    output.result_files_by_person(personsAccess, 'comparison results by person')
-    output.missing_card_list('AMAG missing cards')
+    data_out.card_numbers_CAS(roomAccessCAS, 'AMAG card list')
+    data_out.result_files_by_room(resultAccess, 'comparison results by room')
+    data_out.full_access_setup_file(roomAccessPAMT, 'all rooms access')
+    data_out.result_files_by_person(personsAccess, 'comparison results by person')
+    data_out.missing_card_list('AMAG missing cards')
 
 
 # Press the green button in the gutter to run the script.
