@@ -6,6 +6,7 @@ import os
 import re
 import sys
 from datetime import datetime
+from fpdf import FPDF, HTMLMixin
 
 # global translations
 from typing import Dict, Any, Union
@@ -16,10 +17,10 @@ PAMT2CAS: Dict[Union[str, Any], Union[str, Any]] = {
     'C02 Lobby': 'C01+C02 Main Entrance',
     'C02 Main entry + lobby': 'C01+C02 Main Entrance',
     'C03 Conference room': 'C03 CONFERENCE ROOM',
-    'C04 Customer office': 'C04,C05,C06,C13 CUSTOM.OF',
-    'C05 Customer office eService': 'C04,C05,C06,C13 CUSTOM.OF',
-    'C06 Customer office': 'C04,C05,C06,C13 CUSTOM.OF',
-    'C13 Customer office PEK': 'C04,C05,C06,C13 CUSTOM.OF',
+    'C04 Customer office': 'C04',
+    'C05 Customer office eService': 'C05',
+    'C06 Customer office': 'C06',
+    'C13 Customer office PEK': 'C13',
     'D01 Material lock': 'D01 MATERIAL LOCK',
     'D04 Delivery area': 'D04 DELIVERY AREA',
     'FM Chillers/Generators': 'FM CHILLERSGENERATORS',
@@ -136,7 +137,10 @@ PAMT2Room = {
 CAS2Room = {
     'C01+C02 Main Entrance': ['C01', 'C02'],
     'C03 CONFERENCE ROOM': ['C03'],
-    'C04,C05,C06,C13 CUSTOM.OF': ['C04', 'C05', 'C06', 'C13'],
+    'C04': ['C04'],
+    'C05': ['C05'],
+    'C06': ['C06'],
+    'C13': ['C13'],
     'D01 MATERIAL LOCK': ['D01'],
     'D04 DELIVERY AREA': ['D04'],
     'FM CHILLERSGENERATORS': ['FMCHI'],
@@ -174,10 +178,10 @@ Room2CAS = {
     'C01': 'C01+C02 Main Entrance',
     'C02': 'C01+C02 Main Entrance',
     'C03': 'C03 CONFERENCE ROOM',
-    'C04': 'C04,C05,C06,C13 CUSTOM.OF',
-    'C05': 'C04,C05,C06,C13 CUSTOM.OF',
-    'C06': 'C04,C05,C06,C13 CUSTOM.OF',
-    'C13': 'C04,C05,C06,C13 CUSTOM.OF',
+    'C04': 'C04',
+    'C05': 'C05',
+    'C06': 'C06',
+    'C13': 'C13',
     'D01': 'D01 MATERIAL LOCK',
     'D04': 'D04 DELIVERY AREA',
     'FMCHI': 'FM CHILLERSGENERATORS',
@@ -246,9 +250,13 @@ class dataInput():
         # reverse firstname & name
         #return normalized name LastName, FirstName
 
+        print("LAST:{0}".format(last))
         if 'contractor' in last:
             last = last.replace('contractor ', '')
-            f, l = tuple(last.split())
+            try:
+                f, l = tuple(last.split())
+            except ValueError:
+                f, l = ('contractor','keycard')
         else:
             f = first.split()[0]
             l = last.split()[0]
@@ -275,6 +283,7 @@ class dataInput():
         # process one line from CAS file
         # return dict
 
+        print("LINE:{0}".format(line))
         l, f, c, i, a, to = tuple(line.split('\t'))
         n = self.cleanupCasLine(l, f)
         try:
@@ -464,144 +473,336 @@ class dataInput():
                     resultAccess['remove'][r][n] = roomAccessCAS[r][n]['card']
 
 
+class MyFPDF(FPDF, HTMLMixin):
 
-def generateResultsFiles(reslist, fname):
-    # list to add entries
-    print("GENERATE RESULTS ADD")
+    def __init__(self, title):
+        self.title = title
+        super().__init__()
 
-    res =  '*****************************************************\n'
-    res += '*****************  Entries to ADD   *****************\n'
-    res += '*****************************************************\n'
-    res += 'Generated on: {0}\n\n'.format(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
-    for r in reslist['add'].keys():
-        res += "ROOM:{0} (CAS:{1})\n".format(r, Room2CAS[r])
-        res += '*****************************************************\n'
-        res += 'ACTION\tROOM\tNAME\tEND DATE\tCARD NUMBER\n'
-        res += '*****************************************************\n'
-        for name in reslist['add'][r].keys():
-            if name not in cardList.keys():
-                res += "ADD:\t{0}\t{1}\t{2}\t*** MISSING CARD NUMBER ***\n".format(r, name,
-                                                                                   reslist['add'][r][name].strftime(
-                                                                                       "%Y-%m-%d"))
+    def header(self):
+        # Arial bold 15
+        self.set_font('Arial', 'B', 12)
+        self.set_text_color(128)
+        # Title
+        self.cell(0, 9, self.title, 0, 0, 'C')
+        # Line break
+        self.ln(10)
+
+    def footer(self):
+        # Position at 1.5 cm from bottom
+        self.set_y(-15)
+        # Arial italic 8
+        self.set_font('Arial', 'B', 8)
+        # Text color in gray
+        self.set_text_color(128)
+        # Page number
+        self.cell(30, 10, '' , 0, 0, 'C')
+        self.cell(130, 10, 'Generated on: {0}\n\n'.format(datetime.now().strftime("%Y-%m-%d %H:%M:%S")) , 0, 0, 'C')
+        self.cell(30, 10, 'Page ' + str(self.page_no()) + ' of {nb}' , 0, 0, 'R')
+
+    def chapter_title(self, num, label):
+        # Arial 12
+        self.set_font('Arial', '', 12)
+        # Background color
+        self.set_fill_color(200, 220, 255)
+        # Title
+        self.cell(0, 6, 'Chapter %d : %s' % (num, label), 0, 1, 'L', 1)
+        # Line break
+        self.ln(4)
+
+    def chapter_body(self, name):
+        # Read text file
+        with open(name, 'rb') as fh:
+            txt = fh.read().decode('latin-1')
+        # Times 12
+        self.set_font('Arial', '', 12)
+        # Output justified text
+        self.multi_cell(0, 5, txt)
+        # Line break
+        self.ln()
+        # Mention in italics
+        self.set_font('', 'I')
+        self.cell(0, 5, '(end of excerpt)')
+
+    def print_chapter(self, num, title, name):
+        self.add_page()
+        self.chapter_title(num, title)
+        self.chapter_body(name)
+
+    def table_header(self):
+        self.set_font('Arial', 'B', 10)
+
+    def table_row(self):
+        self.set_font('Arial', '', 10)
+
+    def section_header(self):
+        self.set_font('Arial', 'B', 16)
+
+    def section_subheader(self):
+        self.set_font('Arial', 'B', 12)
+
+class dataOutput():
+
+    def result_files_by_room(self, reslist, fname):
+        # list to add entries
+        print("GENERATE RESULTS ADD")
+
+        pdf = MyFPDF(fname)
+        pdf.alias_nb_pages()
+        pdf.add_page()
+
+        pdf.set_creator('Marek Stelmasik (marek.stelmasik@pl.ibm.com)')
+        pdf.set_subject('fname')
+        pdf.set_title(fname)
+        pdf.set_display_mode('fullpage', 'default')
+
+        pdf.set_font('Arial', 'B', 24)
+        pdf.cell(190, 10, fname, 'B', 1, 'C')
+        pdf.ln()
+
+        pdf.cell(190, 10, 'CARDS TO ADD', 'B', 1, 'C')
+        pdf.ln()
+
+        for r in reslist['add'].keys():
+            pdf.section_header()
+            pdf.cell(190, 10, 'ROOM: {0}'.format(r), 'B', 1, 'L')
+            pdf.section_subheader()
+            pdf.cell(190, 10, 'CAS: {0}'.format(Room2CAS[r]), 'B', 1, 'L')
+
+            pdf.table_header()
+            pdf.cell(20, 6, 'ACTION', 'B', 0, 'L')
+            pdf.cell(20, 6, 'ROOM', 'B', 0, 'L')
+            pdf.cell(50, 6, 'NAME', 'B', 0, 'L')
+            pdf.cell(40, 6, 'DATE', 'B', 0, 'L')
+            pdf.cell(25, 6, 'CARD', 'B', 0, 'L')
+            pdf.ln()
+            pdf.table_row()
+
+            for name in reslist['add'][r].keys():
+                if name not in cardList.keys():
+                    pdf.cell(20, 6, 'ADD', 0, 0, 'L')
+                    pdf.cell(20, 6, '[{0}]'.format(r), 0, 0, 'L')
+                    pdf.cell(50, 6, name, 0, 0, 'L')
+                    pdf.cell(40, 6, reslist['add'][r][name].strftime("%Y-%m-%d"), 0, 0, 'L')
+                    pdf.cell(25, 6, '- - -', 0, 0, 'C')
+                else:
+                    pdf.cell(20, 6, 'ADD', 0, 0, 'L')
+                    pdf.cell(20, 6, '[{0}]'.format(r), 0, 0, 'L')
+                    pdf.cell(50, 6, name, 0, 0, 'L')
+                    pdf.cell(40, 6, reslist['add'][r][name].strftime("%Y-%m-%d"), 0, 0, 'L')
+                    pdf.cell(25, 6, cardList[name], 0, 0, 'L')
+                pdf.ln()
+
+            pdf.ln()
+
+        pdf.set_font('Arial', 'B', 24)
+        pdf.cell(190, 10, 'CARDS TO REMOVE', 'B', 1, 'C')
+        pdf.ln()
+
+        print("GENERATE RESULTS REMOVE")
+
+
+        for r in reslist['remove'].keys():
+            pdf.section_header()
+            pdf.cell(190, 10, 'ROOM: {0}'.format(r), 'B', 1, 'L')
+            pdf.section_subheader()
+            pdf.cell(190, 10, 'CAS: {0}'.format(Room2CAS[r]), 'B', 1, 'L')
+
+            pdf.table_header()
+            pdf.cell(20, 6, 'ACTION', 'B', 0, 'L')
+            pdf.cell(20, 6, 'ROOM', 'B', 0, 'L')
+            pdf.cell(50, 6, 'NAME', 'B', 0, 'L')
+            pdf.cell(25, 6, 'CARD', 'B', 0, 'L')
+            pdf.ln()
+            pdf.table_row()
+            for name in reslist['remove'][r].keys():
+                pdf.cell(20, 6, 'REMOVE', 0, 0, 'L')
+                pdf.cell(20, 6, '[{0}]'.format(r), 0, 0, 'L')
+                pdf.cell(50, 6, name, 0, 0, 'L')
+                pdf.cell(25, 6, cardList[name], 0, 0, 'L')
+                pdf.ln()
+            pdf.ln()
+
+        # pdf.write_html(html)
+        pdf.output(fname + '.pdf', 'F')
+
+    def result_files_by_person(self, reslist, fname):
+        # list to add entries
+        print("GENERATE RESULTS BY PERSON")
+
+        pdf = MyFPDF(fname)
+        pdf.alias_nb_pages()
+        pdf.add_page()
+
+        pdf.set_creator('Marek Stelmasik (marek.stelmasik@pl.ibm.com)')
+        pdf.set_subject('fname')
+        pdf.set_title(fname)
+        pdf.set_display_mode('fullpage', 'default')
+
+        pdf.set_font('Arial', 'B', 24)
+        pdf.cell(190, 10, fname, 'B', 1, 'C')
+        pdf.ln()
+
+        for n in reslist.keys():
+            pdf.section_header()
+            pdf.cell(190, 10, 'NAME: {0}'.format(n), 'B', 1, 'L')
+            pdf.section_subheader()
+            if n not in cardList.keys():
+                pdf.cell(190, 10, 'CARD: - - -', 'B', 1, 'L')
             else:
-                res += "ADD:\t{0}\t{1}\t{2}\t{3}\n".format(r, name, reslist['add'][r][name].strftime("%Y-%m-%d"),
-                                                           cardList[name])
+                pdf.cell(190, 10, 'CARD: {0}'.format(cardList[n]), 'B', 1, 'L')
 
-        res += '*****************************************************\n\n'
+            pdf.table_header()
+            pdf.cell(20, 6, 'ACTION', 'B', 0, 'L')
+            pdf.cell(80, 6, 'ROOM', 'B', 0, 'L')
+            pdf.cell(40, 6, 'DATE', 'B', 0, 'L')
+            pdf.ln()
+            pdf.table_row()
+            for a in reslist[n].keys():
+                if a == 'add':
+                    for r in reslist[n][a]:
+                        pdf.cell(20, 5, 'ADD:', 0, 0, 'L')
+                        pdf.cell(80, 5, 'ROOM: [{0}] ({1})'.format(r['room'], Room2CAS[r['room']]), 0, 0, 'L')
+                        pdf.cell(40, 5, r['to'].strftime("%Y-%m-%d"), 0, 0, 'L')
+                        pdf.ln()
+                else:
+                    for r in reslist[n][a]:
+                        pdf.cell(20, 5, 'REMOVE:', 0, 0, 'L')
+                        pdf.cell(80, 5, 'ROOM: [{0}] ({1})'.format(r['room'], Room2CAS[r['room']]), 0, 0, 'L')
+                        pdf.ln()
 
-    print("GENERATE RESULTS REMOVE")
-    res += '\n\n'
-    res += '*****************************************************\n'
-    res += '***************** Entries to REMOVE *****************\n'
-    res += '*****************************************************\n'
-    res += 'Generated on: {0}\n\n'.format(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+            pdf.ln()
 
-    for r in reslist['remove'].keys():
-        res += "\n\nRoom:{0} (CAS:{1})\n".format(r, Room2CAS[r])
-        res += 'NAME\tCARD NUMBER\n'
-        for name in reslist['remove'][r].keys():
-            res += "REMOVE:\t{0}\t{1}\n".format(name, reslist['remove'][r][name])
-        res += '*****************************************************\n'
-
-    with open(fname, 'w') as f:
-        f.write(res)
-
-def generateResultsFilesbyPerson(reslist, fname):
-    # list to add entries
-    print("GENERATE RESULTS BY PERSON")
-    res =  '*****************************************************\n'
-    res += '****************  Entries to change   ***************\n'
-    res += '*****************************************************\n'
-    res += 'Generated on: {0}\n\n'.format(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
-    for n in reslist.keys():
-        res += '\n{0}\t'.format(n)
-        if n not in cardList.keys():
-            res += '*** MISSING CARD NUMBER ***\n'
-        else:
-            res += 'CARD:{0}\n'.format(cardList[n])
-        #print('{0}'.format(reslist[n]))
-        for a in reslist[n].keys():
-            if a == 'add':
-                for r in reslist[n][a]:
-                    #print('{0}:{1}:{2}:{3}'.format(n, a, r['room'], r['to'].strftime("%Y-%m-%d")))
-                    res += 'ADD:\tROOM:[{0}] ({1})\t{2}\n'.format(r['room'], Room2CAS[r['room']], r['to'].strftime("%Y-%m-%d"))
-            else:
-                for r in reslist[n][a]:
-                    #print('{0}:{1}:{2}:{3}'.format(n, a, r['room'], r['card']))
-                    res += 'REMOVE:\tROOM:[{0}] ({1})\n'.format(r['room'], Room2CAS[r['room']])
-        res += '*****************************************************\n'
-
-    with open(fname, 'w') as f:
-        f.write(res)
+        # pdf.write_html(html)
+        pdf.output(fname + '.pdf', 'F')
 
 
-def generateFullAccessFiles(reslist, fname):
-    # list all PAMT entries
-    print("Generating FULL ACCESS LIST")
-    # return
+    def full_access_setup_file(self, reslist, fname):
+        # list all PAMT entries
+        print("Generating FULL ACCESS LIST")
+        # return
 
-    res = '*****************************************************\n'
-    res += '*****************  Entries LIST     *****************\n'
-    res += '*****************************************************\n'
-    res += 'Generated on: {0}\n\n'.format(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
-    for r in reslist.keys():
-        res += "\n\nROOM:{0} (CAS:{1})\n".format(r, Room2CAS[r])
-        res += 'ACTION\tNAME\tEND DATE\tCARD NUMBER\n'
-        for name in reslist[r].keys():
-            if name not in cardList.keys():
-                res += "SET:\t{0}\t{1}\t*** MISSING CARD NUMBER ***\n".format(name, reslist[r][name]['to'].strftime(
-                    "%Y-%m-%d"))
-            else:
-                res += "SET:\t{0}\t{1}\t{2}\n".format(name, reslist[r][name]['to'].strftime("%Y-%m-%d"), cardList[name])
-        res += '*****************************************************\n'
-
-    with open(fname, 'w') as f:
-        f.write(res)
+        pdf = MyFPDF(fname)
+        pdf.alias_nb_pages()
+        pdf.add_page()
 
 
-def generateCardNumberFiles(reslist, fname):
-    # list all cards per CAS
-    print("Generating CARDS LIST")
+        pdf.set_creator('Marek Stelmasik (marek.stelmasik@pl.ibm.com)')
+        pdf.set_subject('fname')
+        pdf.set_title(fname)
+        pdf.set_display_mode('fullpage', 'default')
 
-    res = '*****************************************************\n'
-    res += '*****************    Cards LIST     *****************\n'
-    res += '*****************************************************\n'
-    res += 'Generated on: {0}\n\n'.format(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
-    for r in reslist.keys():
-        for name in reslist[r].keys():
-            cardList[name] = reslist[r][name]['card']
-
-    res += 'NAME\tCARD#\n'
-    for c in sorted(cardList.keys()):
-        res += "{0}\t{1}\n".format(c, cardList[c])
-
-    with open(fname, 'w') as f:
-        f.write(res)
+        pdf.set_font('Arial', 'B', 24)
+        pdf.cell(190, 10, fname, 'B', 1, 'C')
+        pdf.ln()
 
 
-def generateMissingCardList(fname):
-    # list persons without card number
-    print("Generating MISSIG CARDS LIST")
-    missing = []
-    res = '*****************************************************\n'
-    res += '*************    Missing Cards LIST     *************\n'
-    res += '*****************************************************\n'
-    res += 'Generated on: {0}\n\n'.format(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
-    for r in roomAccessPAMT.keys():
-        for n in roomAccessPAMT[r].keys():
-            if n not in cardList.keys() and n not in missing:
-                missing.append(n)
+        for r in reslist.keys():
+            pdf.section_header()
+            pdf.cell(190, 10, 'ROOM: {0}'.format(r), 'B', 1, 'L')
 
-    for n in sorted(missing):
-        res += "{0}\n".format(n)
+            pdf.section_subheader()
+            pdf.cell(190, 10, 'CAS: {0}'.format(Room2CAS[r]), 'B', 1, 'L')
 
-    with open(fname, 'w') as f:
-        f.write(res)
+            pdf.table_header()
+            pdf.cell(20, 6, 'ACTION', 'B', 0, 'L')
+            pdf.cell(80, 6, 'NAME', 'B', 0, 'L')
+            pdf.cell(40, 6, 'DATE', 'B', 0, 'L')
+            pdf.cell(25, 6, 'CARD', 'B', 0, 'L')
+            pdf.ln()
+            pdf.table_row()
+            for name in reslist[r].keys():
+                if name not in cardList.keys():
+                    pdf.cell(20, 5, 'SET:', 0, 0, 'L')
+                    pdf.cell(80, 5, name, 0, 0, 'L')
+                    pdf.cell(40, 5, reslist[r][name]['to'].strftime("%Y-%m-%d"), 0, 0, 'L')
+                    pdf.cell(25, 5, '- - -', 0, 1, 'C')
+                else:
+                    pdf.cell(20, 5, 'SET:', 0, 0, 'L')
+                    pdf.cell(80, 5, name, 0, 0, 'L')
+                    pdf.cell(40, 5, reslist[r][name]['to'].strftime("%Y-%m-%d"), 0, 0, 'L')
+                    pdf.cell(25, 5, cardList[name], 0, 1, 'L')
+
+            pdf.add_page()
+
+        # pdf.write_html(html)
+        pdf.output(fname + '.pdf', 'F')
+
+
+    def card_numbers_CAS(self, reslist, fname):
+        # list all cards per CAS
+        print("Generating CARDS LIST")
+
+        pdf = MyFPDF(fname)
+        pdf.alias_nb_pages()
+        pdf.add_page()
+
+
+        pdf.set_creator('Marek Stelmasik (marek.stelmasik@pl.ibm.com)')
+        pdf.set_subject(fname)
+        pdf.set_title(fname)
+        pdf.set_display_mode('fullpage')
+
+        pdf.set_font('Arial', 'B', 24)
+        pdf.cell(190, 10, 'AMAG cards list', 'B', 1, 'C')
+        pdf.ln()
+
+
+        for r in reslist.keys():
+            for name in reslist[r].keys():
+                cardList[name] = reslist[r][name]['card']
+
+        pdf.table_header()
+        pdf.cell(80, 6, 'NAME', 'B', 0, 'L')
+        pdf.cell(25, 6, 'CARD', 'B', 0, 'L')
+        pdf.ln()
+        pdf.table_row()
+        for c in sorted(cardList.keys()):
+            pdf.cell(80, 6, c, 0, 0, 'L')
+            pdf.cell(25, 6, cardList[c], 0, 0, 'L')
+            pdf.ln()
+
+        # pdf.write_html(html)
+        pdf.output(fname+'.pdf', 'F')
+
+
+
+    def missing_card_list(self, fname):
+        # list persons without card number
+        print("Generating MISSIG CARDS LIST")
+        missing = []
+        pdf = MyFPDF(fname)
+        pdf.alias_nb_pages()
+        pdf.add_page()
+
+        pdf.set_creator('Marek Stelmasik (marek.stelmasik@pl.ibm.com)')
+        pdf.set_subject(fname)
+        pdf.set_title(fname)
+        pdf.set_display_mode('fullpage')
+
+        pdf.set_font('Arial', 'B', 24)
+        pdf.cell(190, 10, 'AMAG missing cards list', 'B', 1, 'C')
+        pdf.ln()
+
+        for r in roomAccessPAMT.keys():
+            for n in roomAccessPAMT[r].keys():
+                if n not in cardList.keys() and n not in missing:
+                    missing.append(n)
+
+        pdf.table_row()
+        for n in sorted(missing):
+            pdf.cell(80, 6, n, 0, 0, 'L')
+            pdf.ln()
+
+        # pdf.write_html(html)
+        pdf.output(fname + '.pdf', 'F')
 
 
 def run():
     # start execution
     input = dataInput()
+    output = dataOutput()
+
     counter = 0
     with os.scandir('CAS-PAMT') as entries:
         for entry in entries:
@@ -621,11 +822,11 @@ def run():
     input.CAS2PAMTcheck()
     input.PAMTCASbyPerson()
 
-    generateCardNumberFiles(roomAccessCAS, 'AMAG card list.log')
-    generateResultsFiles(resultAccess, 'comparison results by room.log')
-    generateFullAccessFiles(roomAccessPAMT, 'all rooms access.log')
-    generateResultsFilesbyPerson(personsAccess, 'comparison results by person.log')
-    generateMissingCardList('missing cards.log')
+    output.card_numbers_CAS(roomAccessCAS, 'AMAG card list')
+    output.result_files_by_room(resultAccess, 'comparison results by room')
+    output.full_access_setup_file(roomAccessPAMT, 'all rooms access')
+    output.result_files_by_person(personsAccess, 'comparison results by person')
+    output.missing_card_list('AMAG missing cards')
 
 
 # Press the green button in the gutter to run the script.
